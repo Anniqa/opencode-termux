@@ -54,14 +54,15 @@ jobs:
         run: |
           export OPENCODE_WORKTREE="$GITHUB_WORKSPACE/oc-v2"
           export HOST_BUN="$(which bun)"
-          ./scripts/build-opencode2-android.sh
+          bash ./scripts/build-opencode2-android.sh
 
       - name: Create packages
         run: |
-          ./scripts/make-packages-v2.sh
+          bash ./scripts/make-packages-v2.sh
 
       - name: Upload packages artifact
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: opencode2-packages
           path: |
