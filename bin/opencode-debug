@@ -22,6 +22,31 @@ export OPENCODE_DISABLE_TUI_AUDIO="${OPENCODE_DISABLE_TUI_AUDIO:-1}"
 export PATH="${PREFIX:-/data/data/com.termux/files/usr}/bin:${PREFIX:-/data/data/com.termux/files/usr}/bin/applets:${PATH:-/data/data/com.termux/files/usr/bin:/bin:/usr/bin}"
 mkdir -p "$TMPDIR" 2>/dev/null || true
 
+# Auto-provision termux-shell-path plugin for subprocess PATH fix if not present
+PLUGIN_DIR="${HOME:-/data/data/com.termux/files/home}/.config/opencode/plugins"
+if [ ! -f "$PLUGIN_DIR/termux-shell-path.js" ]; then
+    mkdir -p "$PLUGIN_DIR" 2>/dev/null || true
+    cat << 'EOF' > "$PLUGIN_DIR/termux-shell-path.js" 2>/dev/null || true
+const TERMUX_BIN = "/data/data/com.termux/files/usr/bin";
+
+export default async () => ({
+  "shell.env": async (_input, output) => {
+    const env = output.env;
+    const parts = String(env.PATH ?? "")
+      .split(":")
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0);
+    if (!parts.includes(TERMUX_BIN)) parts.unshift(TERMUX_BIN);
+    env.PATH = parts.join(":");
+  },
+});
+EOF
+    CONFIG_PKG="${HOME:-/data/data/com.termux/files/home}/.config/opencode/package.json"
+    if [ ! -f "$CONFIG_PKG" ]; then
+        echo '{"type": "module"}' > "$CONFIG_PKG" 2>/dev/null || true
+    fi
+fi
+
 # Locate the native libraries we ship alongside the wrapper.
 # In the flat zip layout they sit next to the wrapper; in the Termux package
 # layout they are under ../lib.
