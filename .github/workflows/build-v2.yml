@@ -1,0 +1,89 @@
+name: Build OpenCode 2 (opencode2) for Android
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/*-v2.sh'
+      - 'patches/opentui/v2-0.5.10-android.patch'
+      - '.github/workflows/build-v2.yml'
+
+jobs:
+  build:
+    name: Build OpenCode 2 Android (ReleaseFast)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xz-utils patchelf
+
+      - name: Set up Zig 0.16.0
+        run: |
+          mkdir -p "$HOME/.local/zig"
+          curl -sL https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz | tar -xJ -C "$HOME/.local/zig" --strip-components=1
+          echo "$HOME/.local/zig" >> $GITHUB_PATH
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Build libopentui.so (v2 ReleaseFast)
+        run: |
+          export ANDROID_NDK_HOME="${ANDROID_NDK_LATEST_HOME:-/usr/local/lib/android/sdk/ndk/28.0.12433566}"
+          if [ ! -d "$ANDROID_NDK_HOME" ]; then
+            ANDROID_NDK_HOME=$(find /usr/local/lib/android/sdk/ndk -maxdepth 1 -mindepth 1 | sort -V | tail -n 1)
+          fi
+          echo "Using NDK: $ANDROID_NDK_HOME"
+          export ANDROID_NDK_HOME
+          export ZIG_BIN="$HOME/.local/zig/zig"
+          ./scripts/build-opentui-v2.sh
+
+      - name: Clone OpenCode v2-android worktree
+        run: |
+          git clone --depth 1 --branch v2-android https://github.com/guysoft/opencode.git "$GITHUB_WORKSPACE/oc-v2"
+
+      - name: Build opencode2 standalone binary
+        run: |
+          export OPENCODE_WORKTREE="$GITHUB_WORKSPACE/oc-v2"
+          export HOST_BUN="$(which bun)"
+          ./scripts/build-opencode2-android.sh
+
+      - name: Create packages
+        run: |
+          ./scripts/make-packages-v2.sh
+
+      - name: Upload packages artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencode2-packages
+          path: |
+            build-v2/packages/*
+            build-v2/libopentui.so
+
+      - name: Create / Update GitHub Pre-Release
+        uses: softprops/action-gh-release@v2
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        with:
+          tag_name: opencode2-v1.0.0-releasefast
+          name: "OpenCode 2.0 (opencode2) Android ReleaseFast"
+          body: |
+            ## OpenCode 2.0 (opencode2) for Android/Termux (ReleaseFast)
+
+            Built with:
+            - **ReleaseFast OpenTUI 0.5.10**: fixes `panic: integer does not fit in destination type at buffer.zig:925`
+            - **Universal libtagfix.so**: fixes Android 11 Bionic heap tagging & intercepts `syscall(436)` / `epoll_pwait2` seccomp `SIGSYS`
+            - **Isolated libexec layout**: installs `libopentui.so` into `$PREFIX/libexec/opencode2/` to ensure zero conflicts with OpenCode v1
+          files: |
+            build-v2/packages/*
+            build-v2/libopentui.so
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
