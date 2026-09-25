@@ -9,12 +9,17 @@ if [ ! -d "$src/.git" ]; then
   git clone --depth 1 --branch "v${OPENTUI_VERSION}" https://github.com/anomalyco/opentui.git "$src"
 fi
 git -C "$src" apply "$REPO_ROOT/patches/opentui/v2-0.5.10-android.patch" 2>/dev/null || true
+sh "$src/packages/native/scripts/prepare-zig-deps.sh"
 
 rm -rf "$BIONIC_SYSROOT_INC"
 mkdir -p "$BIONIC_SYSROOT_INC"
 cp -a "$NDK_SYSROOT/usr/include/." "$BIONIC_SYSROOT_INC/"
 cp -a "$NDK_SYSROOT/usr/include/aarch64-linux-android/." "$BIONIC_SYSROOT_INC/"
 mkdir -p "$BIONIC_SYSROOT_INC/__opentui"
+cp "$src/packages/native/src/vendor/miniaudio/miniaudio.h" "$BIONIC_SYSROOT_INC/miniaudio.h"
+mkdir -p "$BIONIC_SYSROOT_INC/yoga"
+cp -a "$src/packages/native/zig-deps/yoga/." "$BIONIC_SYSROOT_INC/yoga/"
+
 cat > "$BIONIC_SYSROOT_INC/__opentui/miniaudio_shimmed.h" <<'EOF'
 #define _Nullable
 #define _Nonnull
@@ -43,6 +48,5 @@ EOF
 
 export ANDROID_NDK_HOME BIONIC_SYSROOT_INC ZIG_LIBC
 cd "$src/packages/native"
-sh ./scripts/prepare-zig-deps.sh
 "$ZIG_BIN" build -Dlibrary-target=aarch64-linux-android -Doptimize=ReleaseFast
 cp "lib/aarch64-linux-android/libopentui.so" "$OPENTUI_LIB"
