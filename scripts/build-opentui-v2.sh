@@ -43,5 +43,6 @@ EOF
 
 export ANDROID_NDK_HOME BIONIC_SYSROOT_INC ZIG_LIBC
 cd "$src/packages/native"
+./scripts/prepare-zig-deps.sh
 "$ZIG_BIN" build -Dlibrary-target=aarch64-linux-android -Doptimize=ReleaseFast
 cp "lib/aarch64-linux-android/libopentui.so" "$OPENTUI_LIB"
