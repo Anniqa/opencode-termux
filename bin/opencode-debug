@@ -19,6 +19,7 @@ export TMPDIR="${OPENCODE_TMPDIR:-${HOME:-/data/data/com.termux/files/home}/tmp}
 export TEMP="$TMPDIR"
 export TMP="$TMPDIR"
 export OPENCODE_DISABLE_TUI_AUDIO="${OPENCODE_DISABLE_TUI_AUDIO:-1}"
+export PATH="${PREFIX:-/data/data/com.termux/files/usr}/bin:${PREFIX:-/data/data/com.termux/files/usr}/bin/applets:${PATH:-/data/data/com.termux/files/usr/bin:/bin:/usr/bin}"
 mkdir -p "$TMPDIR" 2>/dev/null || true
 
 # Locate the native libraries we ship alongside the wrapper.

@@ -154,7 +154,7 @@ mkdir -p "$PKG_DIR"
 # ==========================================
 echo ">>> Compiling libtagfix.so..."
 TAGFIX_SO="$PKG_DIR/libtagfix.so"
-"$ANDROID_CC" -shared -fPIC -O2 -o "$TAGFIX_SO" "$TAGFIX_SRC"
+"$ANDROID_CC" -shared -fPIC -O2 -o "$TAGFIX_SO" "$TAGFIX_SRC" -ldl
 echo "    Compiled $(stat -c%s "$TAGFIX_SO") bytes"
 check_elf_aarch64 "$TAGFIX_SO" "libtagfix.so"
 
@@ -240,7 +240,7 @@ cp "$OPENCODE_BINARY" "$PACMAN_USR/libexec/opencode/opencode.bin"
 chmod 755 "$PACMAN_USR/libexec/opencode/opencode.bin"
 
 cp "$TAGFIX_SO" "$PACMAN_USR/lib/libtagfix.so"
-chmod 644 "$PACMAN_USR/lib/libtagfix.so"
+chmod 755 "$PACMAN_USR/lib/libtagfix.so"
 
 cp "$PKG_DIR/libopentui.so" "$PACMAN_USR/lib/libopentui.so"
 chmod 644 "$PACMAN_USR/lib/libopentui.so"
@@ -290,7 +290,7 @@ cp "$OPENCODE_BINARY" "$DEB_USR/libexec/opencode/opencode.bin"
 chmod 755 "$DEB_USR/libexec/opencode/opencode.bin"
 
 cp "$TAGFIX_SO" "$DEB_USR/lib/libtagfix.so"
-chmod 644 "$DEB_USR/lib/libtagfix.so"
+chmod 755 "$DEB_USR/lib/libtagfix.so"
 
 cp "$PKG_DIR/libopentui.so" "$DEB_USR/lib/libopentui.so"
 chmod 644 "$DEB_USR/lib/libopentui.so"

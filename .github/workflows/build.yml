@@ -14,7 +14,7 @@ on:
         description: 'Create a GitHub pre-release with the built artifacts'
         required: false
         type: boolean
-        default: false
+        default: true
       release_tag:
         description: 'Optional pre-release tag name (defaults to v0.2.0-<version>-android15-ci<run>)'
         required: false

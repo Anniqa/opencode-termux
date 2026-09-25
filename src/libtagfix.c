@@ -1,36 +1,29 @@
 /*
- * libtagfix.c — Disable Android bionic software TBI heap pointer tagging
+ * libtagfix.c — Universal Disable for Android Bionic software TBI heap pointer tagging
  *
  * Background:
- *   Android bionic (API 11+) enables software Tag-Based Isolation (TBI) heap
- *   tagging by default: every malloc'd pointer has 0xB4 in its top byte.
+ *   Android bionic enables software Tag-Based Isolation (TBI) heap tagging by default:
+ *   every malloc'd pointer has tag bits in its top byte.
  *   Bun/JavaScriptCore uses the top byte of pointers for NaN-boxing, zeroing it.
  *   When JSC later frees such a pointer, bionic's MaybeUntagAndCheckPointer sees
- *   a tag mismatch (0xB4 expected, 0x00 present) and calls async_safe_fatal:
+ *   a tag mismatch (expected non-zero tag, found 0x00) and calls async_safe_fatal:
  *     "Pointer tag for 0x... was truncated"
- *   This causes a SIGABRT at any free() after JSC allocates a JIT region.
+ *   This causes a SIGABRT at any free() after JSC allocates memory.
  *
- * Fix:
- *   The TBI → NONE downgrade is officially supported by bionic.
- *   mallopt(M_BIONIC_SET_HEAP_TAGGING_LEVEL, M_HEAP_TAGGING_LEVEL_NONE) must
- *   run *inside* the target process before JSC initialises — an LD_PRELOAD
- *   constructor is the correct hook. execv-based wrappers don't work because
- *   execv resets the tagging level on the new process image.
+ * Universal Fix:
+ *   - Android 12+ (API 31+): mallopt(M_BIONIC_SET_HEAP_TAGGING_LEVEL, M_HEAP_TAGGING_LEVEL_NONE)
+ *     where M_BIONIC_SET_HEAP_TAGGING_LEVEL is (-204) and M_HEAP_TAGGING_LEVEL_NONE is 0.
+ *   - Android 11 (API 30): android_mallopt(M_SET_HEAP_TAGGING_LEVEL_ANDROID11, &level, sizeof(level))
+ *     where M_SET_HEAP_TAGGING_LEVEL_ANDROID11 is 8 and level is 0.
+ *     We check weak symbol android_mallopt and fallback to dynamic dlopen("libc.so").
+ *   - Constructor priority 101 ensures execution before standard constructors (priority 65535).
  *
  * This shared object is LD_PRELOAD'd by the opencode wrapper script.
- * On non-Android or Android builds with tagging already NONE, mallopt is a
- * no-op, so this is safe to ship universally.
  */
 
 #include <malloc.h>
-
-/* mallopt() is present in bionic since API 21 but the NDK only exposes the
- * declaration in <malloc.h> when __ANDROID_API__ >= 26.  Add a fallback
- * extern declaration so we can compile against older API targets while still
- * calling the function at runtime (where it is always available). */
-#if defined(__ANDROID__) && defined(__ANDROID_API__) && __ANDROID_API__ < 26
-extern int mallopt(int, int);
-#endif
+#include <dlfcn.h>
+#include <stddef.h>
 
 #ifndef M_BIONIC_SET_HEAP_TAGGING_LEVEL
 #define M_BIONIC_SET_HEAP_TAGGING_LEVEL (-204)
@@ -40,7 +33,30 @@ extern int mallopt(int, int);
 #define M_HEAP_TAGGING_LEVEL_NONE 0
 #endif
 
-__attribute__((constructor))
+#define M_SET_HEAP_TAGGING_LEVEL_ANDROID11 8
+
+extern int mallopt(int, int) __attribute__((weak));
+extern int android_mallopt(int, void*, size_t) __attribute__((weak));
+
+__attribute__((constructor(101)))
 static void disable_heap_tagging(void) {
-    mallopt(M_BIONIC_SET_HEAP_TAGGING_LEVEL, M_HEAP_TAGGING_LEVEL_NONE);
+    // 1. Try modern Android 12+ (API 31+) mallopt
+    if (mallopt) {
+        mallopt(M_BIONIC_SET_HEAP_TAGGING_LEVEL, M_HEAP_TAGGING_LEVEL_NONE);
+    }
+
+    // 2. Try Android 11 (API 30) android_mallopt
+    int level = M_HEAP_TAGGING_LEVEL_NONE;
+    if (android_mallopt) {
+        android_mallopt(M_SET_HEAP_TAGGING_LEVEL_ANDROID11, &level, sizeof(level));
+    } else {
+        void *libc = dlopen("libc.so", RTLD_NOLOAD | RTLD_NOW);
+        if (!libc) libc = dlopen("libc.so", RTLD_NOW);
+        if (libc) {
+            int (*fn)(int, void*, size_t) = (int (*)(int, void*, size_t))dlsym(libc, "android_mallopt");
+            if (fn) {
+                fn(M_SET_HEAP_TAGGING_LEVEL_ANDROID11, &level, sizeof(level));
+            }
+        }
+    }
 }
